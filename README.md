@@ -1,4 +1,4 @@
-# Barcode-plates
+# BarcodePlates
 Template script for generating barcoding plate layouts. 
 
 The purpose of this script is to generate 2 csv files:
