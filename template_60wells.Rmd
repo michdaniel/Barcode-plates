@@ -24,11 +24,11 @@ library(data.table)
 ```{r}
 
 # !!!! Create a vector of all the metals you want to use
-bc_metals <- c("89Y", "102Pd", "104Pd", "105Pd", "106Pd", "108Pd", "110Pd", "113In", "115In", "139La") 
+bc_metals <- c("102Pd", "103Rh", "104Pd", "105Pd", "106Pd", "108Pd", "110Pd", "139La") 
 n <- length(bc_metals)
 
 # !!!! Specify how many metals should be in each combination
-k <- 5
+k <- 4
 combs <- combinations(n, k, v = bc_metals, set = TRUE, repeats.allowed = FALSE)
 
 #Convert to a dataframe
@@ -64,16 +64,16 @@ for (i in pcols) {
 bc <- as.data.table(combs_rand)
 
 # !!!! vector of target plate names
-plates <- c("plate_1", "plate_2", "plate_3", "plate_4", "plate_5")
+plates <- c("plate_1", "plate_2")
 
 # !!!! Add the target plate and wells per plate to the data table
-bc[, plate := rep(plates, c(60, 60, 60, 60, 12))]
+bc[, plate := rep(plates, c(60, 10))]
 
 #Add well names
-bc <- bc[, .(V1, V2, V3, V4, V5, plate, well = wells)]
+bc <- bc[, .(V1, V2, V3, V4, plate, well = wells)]
 
 # !!!! change column names
-setnames(bc, c("metal_1", "metal_2", "metal_3", "metal_4", "metal_5", "plate", "well"))
+setnames(bc, c("metal_1", "metal_2", "metal_3", "metal_4", "plate", "well"))
 ```
 
 
@@ -82,14 +82,15 @@ setnames(bc, c("metal_1", "metal_2", "metal_3", "metal_4", "metal_5", "plate", "
 # !!!! Needs to be adapted depending on how many plates you have
 bc_marvin <- melt(bc, 
      id.vars = c("plate", "well"),
-     measure.vars = c("metal_1", "metal_2", "metal_3", "metal_4", "metal_5"),
+     measure.vars = c("metal_1", "metal_2", "metal_3", "metal_4"),
      variable.name = "metal_index",
      value.name = "metal_id")
 
 
 # !!!! Create a new data table containing info on how you arrange the metals in the origin plate
 metal_key <- data.table(originpos = "P12", 
-                        originwell = c("B02", "B03", "B04", "B05", "B06", "B07", "B08", "B09", "B10", "B11"),
+                        originwell = c("A02", "B02", "C02", "D02", 
+                                       "E02", "F02", "G02", "H02"),
                         metal_id = bc_metals)
 
 #Next join the data tables on the "metal_id" column
@@ -126,8 +127,8 @@ bc_key <- dcast(bc_marvin, targetplate + targetwell ~ metal_id, value.var = "vol
 bc_key <- bc_key[, lapply(.SD, function(x) replace(x, which(is.numeric(x) == TRUE & x!=0), 1))]
 
 # !!!! Change column and value names to be compatible with barcoding key in pipeline
-setnames(bc_key, c("plate", "well", "Pd102", "Pd104", "Pd105", "Pd106", 
-                   "Pd108", "Pd110", "In113", "In115", "La139", "Y89"))
+setnames(bc_key, c("plate", "well", "Pd102", "Rh103", "Pd104", "Pd105", 
+                   "Pd106", "Pd108", "Pd110", "La139"))
 
 #Remove the prefix "plate_" from the plate variable values
 bc_key$plate <- gsub("plate_", "", bc_key$plate)
@@ -142,7 +143,7 @@ bc_key
 bc_key[, .N, by = plate]
 
 #Does each metal occur the right number of times?
-bc_key[, .(sum(Pd102), sum(Y89), sum(In113))]
+bc_key[, .(sum(Pd102), sum(Rh103), sum(La139))]
 
 ```
 
@@ -151,7 +152,7 @@ bc_key[, .(sum(Pd102), sum(Y89), sum(In113))]
 #fwrite the csvs
 ```{r}
 #Specify the file path to the folder where you want to save the csvs
-bc_folder <- file.path("C:/Users/MichelleD/switchdrive/Islet_Project/Barcoding/202008_252wellBC")
+bc_folder <- file.path("C:/Users/MichelleD/switchdrive/Islet_Project/Barcoding/202101_60WBC/")
 
 #Specify file names for the csvs
 fn.marvin <- paste0("bc_marvin", ".csv")
