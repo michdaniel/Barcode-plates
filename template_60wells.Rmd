@@ -96,11 +96,14 @@ metal_key <- data.table(originpos = "P12",
 #Next join the data tables on the "metal_id" column
 bc_marvin <- bc_marvin[metal_key, on = .(metal_id)]
 
+# !!! Add a column to say which position on Marvin the targetplate will be located
+bc_marvin[, targetpos := "P13"]
+
 # !!!! Add a column for volume of each metal to be added per well
 bc_marvin[, volume := 15]
 
 #Change variable names
-setnames(bc_marvin, c("targetplate", "targetwell", "metal_index", "metal_id", "originplate", "originwell", "volume"))
+setnames(bc_marvin, c("targetplate", "targetwell", "metal_index", "metal_id", "originplate", "originwell", "targetpos", "volume"))
 
 #Sort according to plate and well
 setkey(bc_marvin, targetplate, targetwell)
