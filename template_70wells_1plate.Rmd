@@ -1,0 +1,172 @@
+---
+title: "252_well_BC template"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+The purpose of this script is to generate 2 csv files:
+1. For Marvin: This should tell Marvin how much volume of each metal to pipette into each well of the final barcoding plates. Should contain essentially four fields specifying the following: origin plate, origin plate well, target plate, target plate well and volume. 
+
+2. For debarcoding: This should specify which metals are present in each well for each final barcode plate. 
+
+This template is for 252 well BC but can be modified to create other plae formats. 
+Sections indicated with "!!!!" need to be input or adapted by the user.
+
+#Load libraries
+```{r}
+library(gtools)
+library(data.table)
+```
+
+
+#Create a data frame of metal combinations and randomise the order
+```{r}
+
+# !!!! Create a vector of all the metals you want to use
+bc_metals <- c("102Pd", "103Rh", "104Pd", "105Pd", "106Pd", "108Pd", "110Pd", "139La") 
+n <- length(bc_metals)
+
+# !!!! Specify how many metals should be in each combination
+k <- 4
+combs <- combinations(n, k, v = bc_metals, set = TRUE, repeats.allowed = FALSE)
+
+#Convert to a dataframe
+combs <- as.data.frame(combs)
+
+#Shuffle the row indices of the dataframe
+set.seed(345)
+rows <- sample(nrow(combs))
+
+#Use this random vector to reorder the dataset
+combs_rand <- combs[rows, ]
+```
+
+
+#Create a vector of the central 60 wells of the finished barcoding plate
+
+```{r}
+pcols <- c("B", "C", "D", "E", "F", "G", "H")
+prows <- sprintf("%02d", 2:11)
+wells <- c()
+
+for (i in pcols) {
+  pwells <- paste0(i, prows)
+  wells <- c(wells, pwells)
+}
+```
+
+
+#Add the target plate and target wells to the list of randomised combinations
+```{r}
+
+#convert bc to a data table
+bc <- as.data.table(combs_rand)
+
+# !!!! vector of target plate names
+plates <- c("plate_1")
+
+# !!!! Add the target plate and wells per plate to the data table
+bc[, plate := rep(plates, 70)]
+
+#Add well names
+bc <- bc[, .(V1, V2, V3, V4, plate, well = wells)]
+
+# !!!! change column names
+setnames(bc, c("metal_1", "metal_2", "metal_3", "metal_4", "plate", "well"))
+```
+
+
+#Generate the csv template for Marvin
+```{r}
+# !!!! Needs to be adapted depending on how many plates you have
+bc_marvin <- melt(bc, 
+     id.vars = c("plate", "well"),
+     measure.vars = c("metal_1", "metal_2", "metal_3", "metal_4"),
+     variable.name = "metal_index",
+     value.name = "metal_id")
+
+
+# !!!! Create a new data table containing info on how you arrange the metals in the origin plate
+metal_key <- data.table(originpos = "P12", 
+                        originwell = c("A02", "B02", "C02", "D02", 
+                                       "E02", "F02", "G02", "H02"),
+                        metal_id = bc_metals)
+
+#Next join the data tables on the "metal_id" column
+bc_marvin <- bc_marvin[metal_key, on = .(metal_id)]
+
+# !!! Add a column to say which position on Marvin the targetplate will be located
+bc_marvin[, targetpos := "P13"]
+
+# !!!! Add a column for volume of each metal to be added per well
+bc_marvin[, volume := 15]
+
+#Change variable names
+setnames(bc_marvin, c("targetplate", "targetwell", "metal_index", "metal_id", "originplate", "originwell", "targetpos", "volume"))
+
+#Sort according to plate and well
+setkey(bc_marvin, targetplate, targetwell)
+bc_marvin
+
+```
+
+
+
+#Sanity checks
+```{r}
+#Does each metal occur the same number of times?
+bc_marvin[, .N, by = metal_id]
+
+```
+
+
+#Create the key used for debarcoding
+```{r}
+#dcast the data table, assign a 0 where the metal is absent
+bc_key <- dcast(bc_marvin, targetplate + targetwell ~ metal_id, value.var = "volume", fill = 0)
+
+#Replace the volume value with 1 to indicate the metal is present
+bc_key <- bc_key[, lapply(.SD, function(x) replace(x, which(is.numeric(x) == TRUE & x!=0), 1))]
+
+# !!!! Change column and value names to be compatible with barcoding key in pipeline
+setnames(bc_key, c("plate", "well", "Pd102", "Rh103", "Pd104", "Pd105", 
+                   "Pd106", "Pd108", "Pd110", "La139"))
+
+#Remove the prefix "plate_" from the plate variable values
+bc_key$plate <- gsub("plate_", "", bc_key$plate)
+
+bc_key
+```
+
+
+#Sanity checks
+```{r}
+#Does each plate have the correct number of wells?
+bc_key[, .N, by = plate]
+
+#Does each metal occur the right number of times?
+bc_key[, .(sum(Pd102), sum(Rh103), sum(La139))]
+
+```
+
+
+
+#fwrite the csvs
+```{r}
+#Specify the file path to the folder where you want to save the csvs
+bc_folder <- file.path("C:/Users/MichelleD/switchdrive/Islet_Project/Barcoding/202101_60WBC/")
+
+#Specify file names for the csvs
+fn.marvin <- paste0("bc_marvin", ".csv")
+fn.key <-  paste0("bc_key", ".csv")
+fn.metal_key <- paste0("metal_key_originplate", ".csv")
+
+#Write the csvs
+fwrite(bc_marvin, file.path(bc_folder, fn.marvin))
+fwrite(bc_key, file.path(bc_folder, fn.key))
+fwrite(metal_key, file.path(bc_folder, fn.metal_key))
+```
+
+
+
